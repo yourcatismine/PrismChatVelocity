@@ -22,14 +22,26 @@ public class PlayerDataListener {
         Player player = event.getPlayer();
         String serverName = event.getServer().getServerInfo().getName();
 
-        try (Connection connection = databaseManager.getConnection();
-                PreparedStatement statement = connection.prepareStatement(
-                        "REPLACE INTO active_players (uuid, gamertag, region) VALUES (?, ?, ?)")) {
+        try (Connection connection = databaseManager.getConnection()) {
+            // Save to active_players (session info)
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "REPLACE INTO active_players (uuid, gamertag, region) VALUES (?, ?, ?)")) {
+                statement.setString(1, player.getUniqueId().toString());
+                statement.setString(2, player.getUsername());
+                statement.setString(3, serverName);
+                statement.executeUpdate();
+            }
 
-            statement.setString(1, player.getUniqueId().toString());
-            statement.setString(2, player.getUsername());
-            statement.setString(3, serverName);
-            statement.executeUpdate();
+            // Save to player_data (persistent info)
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "INSERT INTO player_data (uuid, gamertag, last_region, last_location) VALUES (?, ?, ?, ?) " +
+                            "ON DUPLICATE KEY UPDATE gamertag = VALUES(gamertag), last_region = VALUES(last_region), last_location = VALUES(last_location)")) {
+                statement.setString(1, player.getUniqueId().toString());
+                statement.setString(2, player.getUsername());
+                statement.setString(3, serverName);
+                statement.setString(4, serverName); // Location is server name for now
+                statement.executeUpdate();
+            }
 
             System.out.println("[PrismChat-Debug] Saved player data for " + player.getUsername() + " (Server: "
                     + serverName + ")");
@@ -44,17 +56,18 @@ public class PlayerDataListener {
     public void onDisconnect(DisconnectEvent event) {
         Player player = event.getPlayer();
 
-        try (Connection connection = databaseManager.getConnection();
-                PreparedStatement statement = connection.prepareStatement(
-                        "DELETE FROM active_players WHERE uuid = ?")) {
+        try (Connection connection = databaseManager.getConnection()) {
+            // Remove from active_players
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "DELETE FROM active_players WHERE uuid = ?")) {
+                statement.setString(1, player.getUniqueId().toString());
+                statement.executeUpdate();
+            }
 
-            statement.setString(1, player.getUniqueId().toString());
-            statement.executeUpdate();
-
-            System.out.println("[PrismChat-Debug] Deleted player data for " + player.getUsername() + " (Disconnected)");
+            System.out.println("[PrismChat-Debug] Deleted session data for " + player.getUsername());
 
         } catch (SQLException e) {
-            System.err.println("[PrismChat-Debug] ERROR: Could not delete data for " + player.getUsername());
+            System.err.println("[PrismChat-Debug] ERROR: Could not handle disconnect for " + player.getUsername());
             e.printStackTrace();
         }
     }

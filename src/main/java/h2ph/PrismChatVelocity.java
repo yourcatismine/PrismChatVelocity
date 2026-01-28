@@ -46,6 +46,7 @@ public class PrismChatVelocity {
 
         // Register Listeners
         server.getEventManager().register(this, new h2ph.listeners.PlayerDataListener(databaseManager));
+        server.getEventManager().register(this, new h2ph.listeners.PersistenceListener(server, databaseManager));
 
         server.getCommandManager().register(
                 server.getCommandManager().metaBuilder("prismvoid").build(),

@@ -43,6 +43,15 @@ public class DatabaseManager {
                     "time_joined TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
                     "region VARCHAR(32) NOT NULL" +
                     ");");
+
+            statement.executeUpdate("CREATE TABLE IF NOT EXISTS player_data (" +
+                    "uuid VARCHAR(36) PRIMARY KEY, " +
+                    "gamertag VARCHAR(16) NOT NULL, " +
+                    "first_join TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "last_join TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, " +
+                    "last_region VARCHAR(32) NOT NULL, " +
+                    "last_location VARCHAR(128) NOT NULL" +
+                    ");");
         } catch (SQLException e) {
             e.printStackTrace();
         }
