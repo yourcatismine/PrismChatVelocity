@@ -8,8 +8,8 @@ import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.Player;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.slf4j.Logger;
+import h2ph.db.DatabaseManager;
 
 @Plugin(id = "prismchatvelocity", name = "PrismChat", version = "1.0-SNAPSHOT", description = "Global Chat Plugin for Velocity", authors = {
         "User" })
@@ -17,15 +17,36 @@ public class PrismChatVelocity {
 
     private final ProxyServer server;
     private final Logger logger;
+    private final java.nio.file.Path dataDirectory; // Inject data directory
+    private DatabaseManager databaseManager;
+    private h2ph.config.ConfigManager configManager;
 
     @Inject
-    public PrismChatVelocity(ProxyServer server, Logger logger) {
+    public PrismChatVelocity(ProxyServer server, Logger logger,
+            @com.velocitypowered.api.plugin.annotation.DataDirectory java.nio.file.Path dataDirectory) {
         this.server = server;
         this.logger = logger;
+        this.dataDirectory = dataDirectory;
     }
 
     @Subscribe
     public void onProxyInitialization(ProxyInitializeEvent event) {
+        // Initialize Config
+        configManager = new h2ph.config.ConfigManager(dataDirectory);
+        configManager.loadConfig();
+
+        // Initialize Database
+        databaseManager = new DatabaseManager();
+        databaseManager.initialize(
+                configManager.getString("host", "localhost"),
+                configManager.getInt("port", 3306),
+                configManager.getString("database", "minecraft"),
+                configManager.getString("username", "root"),
+                configManager.getString("password", "password"));
+
+        // Register Listeners
+        server.getEventManager().register(this, new h2ph.listeners.PlayerDataListener(databaseManager));
+
         server.getCommandManager().register(
                 server.getCommandManager().metaBuilder("prismvoid").build(),
                 (com.velocitypowered.api.command.SimpleCommand) invocation -> {
@@ -61,4 +82,8 @@ public class PrismChatVelocity {
         }
 
     }
+
+    // Cleanup on disable/shutdown if needed, though Velocity doesn't have a direct
+    // onDisable counterpart in the same way.
+    // Usually handled via ProxyShutdownEvent if critical.
 }
