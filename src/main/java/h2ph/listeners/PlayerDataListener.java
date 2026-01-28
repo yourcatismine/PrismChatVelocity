@@ -31,7 +31,11 @@ public class PlayerDataListener {
             statement.setString(3, serverName);
             statement.executeUpdate();
 
+            System.out.println("[PrismChat-Debug] Saved player data for " + player.getUsername() + " (Server: "
+                    + serverName + ")");
+
         } catch (SQLException e) {
+            System.err.println("[PrismChat-Debug] ERROR: Could not save data for " + player.getUsername());
             e.printStackTrace();
         }
     }
@@ -47,7 +51,10 @@ public class PlayerDataListener {
             statement.setString(1, player.getUniqueId().toString());
             statement.executeUpdate();
 
+            System.out.println("[PrismChat-Debug] Deleted player data for " + player.getUsername() + " (Disconnected)");
+
         } catch (SQLException e) {
+            System.err.println("[PrismChat-Debug] ERROR: Could not delete data for " + player.getUsername());
             e.printStackTrace();
         }
     }
