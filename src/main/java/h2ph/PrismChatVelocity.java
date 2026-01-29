@@ -19,6 +19,7 @@ public class PrismChatVelocity {
     private final Logger logger;
     private final java.nio.file.Path dataDirectory; // Inject data directory
     private DatabaseManager databaseManager;
+    private h2ph.redis.RedisManager redisManager;
     private h2ph.config.ConfigManager configManager;
 
     @Inject
@@ -38,14 +39,17 @@ public class PrismChatVelocity {
         // Initialize Database
         databaseManager = new DatabaseManager();
         databaseManager.initialize(
-                configManager.getString("host", "localhost"),
-                configManager.getInt("port", 3306),
-                configManager.getString("database", "minecraft"),
-                configManager.getString("username", "root"),
-                configManager.getString("password", "password"));
+                configManager.getString("mysql.host", "localhost"),
+                configManager.getInt("mysql.port", 3306),
+                configManager.getString("mysql.database", "minecraft"),
+                configManager.getString("mysql.username", "root"),
+                configManager.getString("mysql.password", "password"));
+
+        // Initialize Redis
+        redisManager = new h2ph.redis.RedisManager(configManager);
 
         // Register Listeners
-        server.getEventManager().register(this, new h2ph.listeners.PlayerDataListener(databaseManager));
+        server.getEventManager().register(this, new h2ph.listeners.PlayerDataListener(databaseManager, redisManager));
         server.getEventManager().register(this, new h2ph.listeners.PersistenceListener(server, databaseManager));
 
         server.getCommandManager().register(
@@ -53,6 +57,19 @@ public class PrismChatVelocity {
                 (com.velocitypowered.api.command.SimpleCommand) invocation -> {
                     // Do nothing
                 });
+
+        // Schedule Ping Update Task (every 10 seconds)
+        server.getScheduler().buildTask(this, () -> {
+            if (redisManager != null) {
+                for (Player player : server.getAllPlayers()) {
+                    long ping = player.getPing();
+                    redisManager.setPlayerPing(player.getUniqueId(), ping);
+                }
+            }
+        })
+                .repeat(java.time.Duration.ofSeconds(10))
+                .schedule();
+
         logger.info("PrismChat has been enabled!");
     }
 

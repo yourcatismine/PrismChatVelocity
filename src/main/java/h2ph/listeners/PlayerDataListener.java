@@ -11,10 +11,12 @@ import java.sql.SQLException;
 
 public class PlayerDataListener {
 
-    private final DatabaseManager databaseManager;
+    private final h2ph.db.DatabaseManager databaseManager;
+    private final h2ph.redis.RedisManager redisManager;
 
-    public PlayerDataListener(DatabaseManager databaseManager) {
+    public PlayerDataListener(DatabaseManager databaseManager, h2ph.redis.RedisManager redisManager) {
         this.databaseManager = databaseManager;
+        this.redisManager = redisManager;
     }
 
     @Subscribe
@@ -22,17 +24,16 @@ public class PlayerDataListener {
         Player player = event.getPlayer();
         String serverName = event.getServer().getServerInfo().getName();
 
-        try (Connection connection = databaseManager.getConnection()) {
-            // Save to active_players (session info)
-            try (PreparedStatement statement = connection.prepareStatement(
-                    "REPLACE INTO active_players (uuid, gamertag, region) VALUES (?, ?, ?)")) {
-                statement.setString(1, player.getUniqueId().toString());
-                statement.setString(2, player.getUsername());
-                statement.setString(3, serverName);
-                statement.executeUpdate();
-            }
+        // Save to Redis (active session)
+        if (redisManager != null) {
+            redisManager.setPlayerUuid(player.getUsername(), player.getUniqueId());
+            redisManager.setPlayerGamertag(player.getUniqueId(), player.getUsername());
+            redisManager.setPlayerServer(player.getUniqueId(), serverName);
+            System.out.println("[PrismChat-Debug] Saved player session to Redis for " + player.getUsername());
+        }
 
-            // Save to player_data (persistent info)
+        // Save to player_data (persistent info) in MySQL
+        try (Connection connection = databaseManager.getConnection()) {
             try (PreparedStatement statement = connection.prepareStatement(
                     "INSERT INTO player_data (uuid, gamertag, last_region, last_location) VALUES (?, ?, ?, ?) " +
                             "ON DUPLICATE KEY UPDATE gamertag = VALUES(gamertag), last_region = VALUES(last_region), last_location = VALUES(last_location)")) {
@@ -43,11 +44,12 @@ public class PlayerDataListener {
                 statement.executeUpdate();
             }
 
-            System.out.println("[PrismChat-Debug] Saved player data for " + player.getUsername() + " (Server: "
-                    + serverName + ")");
+            System.out
+                    .println("[PrismChat-Debug] Saved persistent player data for " + player.getUsername() + " (Server: "
+                            + serverName + ")");
 
         } catch (SQLException e) {
-            System.err.println("[PrismChat-Debug] ERROR: Could not save data for " + player.getUsername());
+            System.err.println("[PrismChat-Debug] ERROR: Could not save persistent data for " + player.getUsername());
             e.printStackTrace();
         }
     }
@@ -56,19 +58,11 @@ public class PlayerDataListener {
     public void onDisconnect(DisconnectEvent event) {
         Player player = event.getPlayer();
 
-        try (Connection connection = databaseManager.getConnection()) {
-            // Remove from active_players
-            try (PreparedStatement statement = connection.prepareStatement(
-                    "DELETE FROM active_players WHERE uuid = ?")) {
-                statement.setString(1, player.getUniqueId().toString());
-                statement.executeUpdate();
-            }
-
-            System.out.println("[PrismChat-Debug] Deleted session data for " + player.getUsername());
-
-        } catch (SQLException e) {
-            System.err.println("[PrismChat-Debug] ERROR: Could not handle disconnect for " + player.getUsername());
-            e.printStackTrace();
+        // Remove from Redis
+        if (redisManager != null) {
+            redisManager.removePlayerServer(player.getUniqueId());
+            redisManager.removePlayerPing(player.getUniqueId());
+            System.out.println("[PrismChat-Debug] Removed player session from Redis for " + player.getUsername());
         }
     }
 }

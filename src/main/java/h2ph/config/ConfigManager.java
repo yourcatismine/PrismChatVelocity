@@ -43,7 +43,15 @@ public class ConfigManager {
                 "  port: 3306\n" +
                 "  database: minecraft\n" +
                 "  username: root\n" +
-                "  password: password\n";
+                "  username: root\n" +
+                "  password: password\n" +
+                "\n" +
+                "# Redis Configuration\n" +
+                "redis:\n" +
+                "  host: localhost\n" +
+                "  port: 6379\n" +
+                "  username: \"\"\n" +
+                "  password: \"\"\n";
 
         try (BufferedWriter writer = Files.newBufferedWriter(configFile, StandardOpenOption.CREATE)) {
             writer.write(defaultConfig);
@@ -53,20 +61,57 @@ public class ConfigManager {
     private void readConfig(Path configFile) throws IOException {
         try (BufferedReader reader = Files.newBufferedReader(configFile)) {
             String line;
+            String currentSection = "";
+
             while ((line = reader.readLine()) != null) {
+                String originalLine = line;
                 line = line.trim();
+
                 if (line.isEmpty() || line.startsWith("#"))
                     continue;
 
-                // Simple parser for "key: value"
-                // This doesn't support nested structures well, but works for our simple use
-                // case
-                // if we expect flat keys or just parse basic lines.
-                // Given the default config above, we can just look for specific keys.
+                // Calculate indentation
+                int indentation = 0;
+                while (indentation < originalLine.length() && originalLine.charAt(indentation) == ' ') {
+                    indentation++;
+                }
+
+                if (line.endsWith(":")) {
+                    // It's a section
+                    String sectionName = line.substring(0, line.length() - 1);
+                    if (indentation == 0) {
+                        currentSection = sectionName;
+                    } else {
+                        // Support nested sections if needed, but for now just 1 level deep is fine
+                        // or we can append. logic for "redis:" inside something else is tricky without
+                        // a stack.
+                        // Assuming flat structure:
+                        // mysql:
+                        // host: ...
+                        // redis:
+                        // host: ...
+                        // If we see indentation 0, we reset section.
+                    }
+                    continue;
+                }
 
                 String[] parts = line.split(":", 2);
                 if (parts.length == 2) {
-                    configValues.put(parts[0].trim(), parts[1].trim());
+                    String key = parts[0].trim();
+                    String value = parts[1].trim();
+
+                    // Remove surrounding quotes if present
+                    if (value.startsWith("'") && value.endsWith("'")) {
+                        value = value.substring(1, value.length() - 1);
+                    } else if (value.startsWith("\"") && value.endsWith("\"")) {
+                        value = value.substring(1, value.length() - 1);
+                    }
+
+                    if (indentation > 0 && !currentSection.isEmpty()) {
+                        configValues.put(currentSection + "." + key, value);
+                    } else {
+                        configValues.put(key, value);
+                    }
                 }
             }
         }
