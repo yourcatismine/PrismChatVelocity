@@ -8,11 +8,20 @@ import h2ph.db.DatabaseManager;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 public class PlayerDataListener {
 
     private final h2ph.db.DatabaseManager databaseManager;
     private final h2ph.redis.RedisManager redisManager;
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    private final Map<UUID, ScheduledFuture<?>> pendingSaves = new ConcurrentHashMap<>();
 
     public PlayerDataListener(DatabaseManager databaseManager, h2ph.redis.RedisManager redisManager) {
         this.databaseManager = databaseManager;
@@ -50,6 +59,13 @@ public class PlayerDataListener {
             } catch (Exception ignored) {
             }
 
+            // Cancel any pending offline-save for this player (server transfer race)
+            try {
+                ScheduledFuture<?> future = pendingSaves.remove(player.getUniqueId());
+                if (future != null) future.cancel(false);
+            } catch (Exception ignored) {
+            }
+
             System.out
                     .println("[PrismChat-Debug] Saved persistent player data for " + player.getUsername() + " (Server: "
                             + serverName + ")");
@@ -70,15 +86,29 @@ public class PlayerDataListener {
             redisManager.removePlayerPing(player.getUniqueId());
             System.out.println("[PrismChat-Debug] Removed player session from Redis for " + player.getUsername());
         }
-
-        // Save offline record in MySQL so backend can fetch and teleport to last location
+        // Schedule saving offline record after a short delay to avoid transient server-transfer entries
         try {
+            UUID id = player.getUniqueId();
+            String gamertag = player.getUsername();
             String lastLocation = player.getCurrentServer().isPresent() ?
                     player.getCurrentServer().get().getServerInfo().getName() : "unknown";
-            databaseManager.saveOfflinePlayer(player.getUniqueId().toString(), player.getUsername(), lastLocation);
-            System.out.println("[PrismChat-Debug] Saved offline player record for " + player.getUsername());
+
+            ScheduledFuture<?> future = scheduler.schedule(() -> {
+                try {
+                    databaseManager.saveOfflinePlayer(id.toString(), gamertag, lastLocation);
+                    System.out.println("[PrismChat-Debug] Saved offline player record for " + gamertag);
+                } catch (Exception e) {
+                    System.err.println("[PrismChat-Debug] ERROR: Could not save offline record for " + gamertag);
+                    e.printStackTrace();
+                } finally {
+                    pendingSaves.remove(id);
+                }
+            }, 5, TimeUnit.SECONDS);
+
+            ScheduledFuture<?> existing = pendingSaves.put(id, future);
+            if (existing != null) existing.cancel(false);
         } catch (Exception e) {
-            System.err.println("[PrismChat-Debug] ERROR: Could not save offline record for " + player.getUsername());
+            System.err.println("[PrismChat-Debug] ERROR: Could not schedule offline record save for " + player.getUsername());
             e.printStackTrace();
         }
     }
