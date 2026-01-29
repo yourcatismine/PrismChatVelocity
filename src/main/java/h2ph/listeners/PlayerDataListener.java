@@ -44,6 +44,12 @@ public class PlayerDataListener {
                 statement.executeUpdate();
             }
 
+            // If the player was previously marked offline, remove that record now they're online
+            try {
+                databaseManager.removeOfflinePlayer(player.getUniqueId().toString());
+            } catch (Exception ignored) {
+            }
+
             System.out
                     .println("[PrismChat-Debug] Saved persistent player data for " + player.getUsername() + " (Server: "
                             + serverName + ")");
@@ -63,6 +69,17 @@ public class PlayerDataListener {
             redisManager.removePlayerServer(player.getUniqueId());
             redisManager.removePlayerPing(player.getUniqueId());
             System.out.println("[PrismChat-Debug] Removed player session from Redis for " + player.getUsername());
+        }
+
+        // Save offline record in MySQL so backend can fetch and teleport to last location
+        try {
+            String lastLocation = player.getCurrentServer().isPresent() ?
+                    player.getCurrentServer().get().getServerInfo().getName() : "unknown";
+            databaseManager.saveOfflinePlayer(player.getUniqueId().toString(), player.getUsername(), lastLocation);
+            System.out.println("[PrismChat-Debug] Saved offline player record for " + player.getUsername());
+        } catch (Exception e) {
+            System.err.println("[PrismChat-Debug] ERROR: Could not save offline record for " + player.getUsername());
+            e.printStackTrace();
         }
     }
 }
