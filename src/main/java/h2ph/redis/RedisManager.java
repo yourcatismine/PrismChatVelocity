@@ -105,6 +105,7 @@ public class RedisManager {
         }
     }
 
+
     public void removePlayerPing(UUID uuid) {
         try (Jedis jedis = getResource()) {
             jedis.del("prism:player:ping:" + uuid.toString());

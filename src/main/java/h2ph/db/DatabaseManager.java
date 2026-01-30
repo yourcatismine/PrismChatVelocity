@@ -35,6 +35,15 @@ public class DatabaseManager {
         }
     }
 
+    /**
+     * Ensure the offline_players table has the expected columns. If the
+     * `last_region` column is missing (older installs), attempt a safe migration:
+     *  - add nullable `last_region`
+     *  - copy values from `last_location` where appropriate
+     *  - make the column NOT NULL with default 'unknown'
+     */
+    // offline_players schema migration removed — offline storage no longer used
+
     private void createTable() {
         if (dataSource == null)
             return;
@@ -56,60 +65,28 @@ public class DatabaseManager {
                     "last_location VARCHAR(128) NOT NULL" +
                     ");");
 
-            statement.executeUpdate("CREATE TABLE IF NOT EXISTS offline_players (" +
-                    "uuid VARCHAR(36) PRIMARY KEY, " +
-                    "gamertag VARCHAR(16) NOT NULL, " +
-                    "time_left TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "last_location VARCHAR(128) NOT NULL" +
-                    ");");
+                    // offline_players table removed — backend handles offline storage now
         } catch (SQLException e) {
             e.printStackTrace();
         }
     }
 
-    public void saveOfflinePlayer(String uuid, String gamertag, String lastLocation) {
-        if (dataSource == null) return;
-        String sql = "INSERT INTO offline_players (uuid, gamertag, time_left, last_location) VALUES (?, ?, CURRENT_TIMESTAMP, ?) " +
-                "ON DUPLICATE KEY UPDATE gamertag = VALUES(gamertag), time_left = VALUES(time_left), last_location = VALUES(last_location)";
-        try (Connection connection = getConnection(); PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setString(1, uuid);
-            stmt.setString(2, gamertag);
-            stmt.setString(3, lastLocation);
-            stmt.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-    }
+    // offline player helper methods removed — backend handles offline storage
 
-    public OfflinePlayerRecord getOfflinePlayer(String uuid) {
+    public String getLastRegion(String uuid) {
         if (dataSource == null) return null;
-        String sql = "SELECT uuid, gamertag, time_left, last_location FROM offline_players WHERE uuid = ?";
+        String sql = "SELECT last_region FROM player_data WHERE uuid = ?";
         try (Connection connection = getConnection(); PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, uuid);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    String u = rs.getString("uuid");
-                    String gamertag = rs.getString("gamertag");
-                    Timestamp timeLeft = rs.getTimestamp("time_left");
-                    String lastLocation = rs.getString("last_location");
-                    return new OfflinePlayerRecord(u, gamertag, timeLeft, lastLocation);
+                    return rs.getString("last_region");
                 }
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
         return null;
-    }
-
-    public void removeOfflinePlayer(String uuid) {
-        if (dataSource == null) return;
-        String sql = "DELETE FROM offline_players WHERE uuid = ?";
-        try (Connection connection = getConnection(); PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setString(1, uuid);
-            stmt.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
     }
 
     public Connection getConnection() throws SQLException {
