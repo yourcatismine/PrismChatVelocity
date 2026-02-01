@@ -7,6 +7,9 @@ import redis.clients.jedis.JedisPoolConfig;
 
 import java.time.Duration;
 import java.util.UUID;
+import java.util.function.Consumer;
+import redis.clients.jedis.JedisPubSub;
+import com.google.gson.Gson;
 
 public class RedisManager {
 
@@ -112,5 +115,52 @@ public class RedisManager {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    // Publish team chat payload JSON to channel
+    public void publishTeamChat(String channel, String jsonPayload) {
+        try (Jedis jedis = getResource()) {
+            jedis.publish(channel, jsonPayload);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    // Subscribe to a channel and forward messages to the provided consumer on a new thread
+    public void subscribe(String channel, Consumer<String> onMessage) {
+        Thread t = new Thread(() -> {
+            try (Jedis jedis = getResource()) {
+                JedisPubSub pubSub = new JedisPubSub() {
+                    @Override
+                    public void onMessage(String ch, String message) {
+                        if (onMessage != null) {
+                            try {
+                                onMessage.accept(message);
+                            } catch (Exception ex) {
+                                ex.printStackTrace();
+                            }
+                        }
+                    }
+                };
+
+                jedis.subscribe(pubSub, channel);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }, "prism-redis-sub-" + channel);
+
+        t.setDaemon(true);
+        t.start();
+    }
+
+    public String makeTeamChatPayload(String sender, String teamId, String teamName, String message, String origin) {
+        Gson g = new Gson();
+        java.util.Map<String, String> map = new java.util.HashMap<>();
+        map.put("sender", sender);
+        map.put("teamId", teamId);
+        map.put("teamName", teamName);
+        map.put("message", message);
+        map.put("origin", origin != null ? origin : "");
+        return g.toJson(map);
     }
 }

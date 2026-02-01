@@ -31,6 +31,15 @@ public class ConfigManager {
 
             readConfig(configFile);
 
+            // Support an alternate backend database config which can override DB settings.
+            Path backendConfig = dataDirectory.resolve("backend-database.yml");
+            if (!Files.exists(backendConfig)) {
+                createDefaultBackendConfig(backendConfig);
+            }
+
+            // Read backend config and overlay values (backend takes precedence)
+            readConfig(backendConfig);
+
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -43,7 +52,6 @@ public class ConfigManager {
                 "  port: 3306\n" +
                 "  database: minecraft\n" +
                 "  username: root\n" +
-                "  username: root\n" +
                 "  password: password\n" +
                 "\n" +
                 "# Redis Configuration\n" +
@@ -55,6 +63,21 @@ public class ConfigManager {
 
         try (BufferedWriter writer = Files.newBufferedWriter(configFile, StandardOpenOption.CREATE)) {
             writer.write(defaultConfig);
+        }
+    }
+
+    private void createDefaultBackendConfig(Path backendConfig) throws IOException {
+        String backendDefault = "# Optional backend database config which overrides mysql values\n" +
+                "# Use this file to point the proxy at a separate backend database if needed.\n" +
+                "mysql:\n" +
+                "  host: localhost\n" +
+                "  port: 3306\n" +
+                "  database: minecraft\n" +
+                "  username: root\n" +
+                "  password: password\n";
+
+        try (BufferedWriter writer = Files.newBufferedWriter(backendConfig, StandardOpenOption.CREATE)) {
+            writer.write(backendDefault);
         }
     }
 
@@ -127,5 +150,39 @@ public class ConfigManager {
         } catch (NumberFormatException e) {
             return defaultValue;
         }
+    }
+
+    // Helper getters that prefer backend overrides when present.
+    private String getWithBackendFallback(String key, String defaultValue) {
+        String backendKey = "backend." + key;
+        if (configValues.containsKey(backendKey)) {
+            return configValues.get(backendKey);
+        }
+        return configValues.getOrDefault(key, defaultValue);
+    }
+
+    public String getDatabaseHost(String defaultValue) {
+        return getWithBackendFallback("mysql.host", defaultValue);
+    }
+
+    public int getDatabasePort(int defaultValue) {
+        String val = getWithBackendFallback("mysql.port", String.valueOf(defaultValue));
+        try {
+            return Integer.parseInt(val);
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    public String getDatabaseName(String defaultValue) {
+        return getWithBackendFallback("mysql.database", defaultValue);
+    }
+
+    public String getDatabaseUsername(String defaultValue) {
+        return getWithBackendFallback("mysql.username", defaultValue);
+    }
+
+    public String getDatabasePassword(String defaultValue) {
+        return getWithBackendFallback("mysql.password", defaultValue);
     }
 }

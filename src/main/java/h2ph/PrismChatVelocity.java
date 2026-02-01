@@ -10,6 +10,8 @@ import com.velocitypowered.api.proxy.Player;
 import net.kyori.adventure.text.Component;
 import org.slf4j.Logger;
 import h2ph.db.DatabaseManager;
+import h2ph.cache.PlayerCache;
+import h2ph.cache.ProxyPlayerData;
 
 @Plugin(id = "prismchatvelocity", name = "PrismChat", version = "1.0-SNAPSHOT", description = "Global Chat Plugin for Velocity", authors = {
         "User" })
@@ -21,6 +23,7 @@ public class PrismChatVelocity {
     private DatabaseManager databaseManager;
     private h2ph.redis.RedisManager redisManager;
     private h2ph.config.ConfigManager configManager;
+    private PlayerCache playerCache;
 
     @Inject
     public PrismChatVelocity(ProxyServer server, Logger logger,
@@ -39,17 +42,35 @@ public class PrismChatVelocity {
         // Initialize Database
         databaseManager = new DatabaseManager();
         databaseManager.initialize(
-                configManager.getString("mysql.host", "localhost"),
-                configManager.getInt("mysql.port", 3306),
-                configManager.getString("mysql.database", "minecraft"),
-                configManager.getString("mysql.username", "root"),
-                configManager.getString("mysql.password", "password"));
+            configManager.getDatabaseHost("localhost"),
+            configManager.getDatabasePort(3306),
+            configManager.getDatabaseName("minecraft"),
+            configManager.getDatabaseUsername("root"),
+            configManager.getDatabasePassword("password"));
 
         // Initialize Redis
         redisManager = new h2ph.redis.RedisManager(configManager);
 
+        // Initialize Player Cache
+        playerCache = new PlayerCache(databaseManager);
+
+        // Register Team Chat Listener (handles intercepting chat and redis subscription)
+        String instanceId = java.util.UUID.randomUUID().toString();
+        server.getEventManager().register(this, new h2ph.listeners.TeamChatListener(server, databaseManager, redisManager, playerCache, instanceId));
+
         // Register Listeners
-        server.getEventManager().register(this, new h2ph.listeners.PlayerDataListener(databaseManager, redisManager));
+        server.getEventManager().register(this, new h2ph.listeners.PlayerDataListener(databaseManager, redisManager, playerCache));
+
+        // Subscribe to prism:player_update for cache invalidation
+        redisManager.subscribe("prism:player_update", msg -> {
+            try {
+                java.util.UUID uuid = java.util.UUID.fromString(msg);
+                playerCache.invalidate(uuid);
+                System.out.println("[PrismChat-Debug] Invalidated cache for " + uuid);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
         server.getEventManager().register(this, new h2ph.listeners.PersistenceListener(server, databaseManager));
 
         server.getCommandManager().register(
@@ -75,9 +96,16 @@ public class PrismChatVelocity {
 
     @Subscribe
     public void onChat(PlayerChatEvent event) {
-
+        // If player has team chat enabled, do not perform the global broadcast here.
         Player player = event.getPlayer();
         String message = event.getMessage();
+
+        // Use cache for instant check
+        ProxyPlayerData cached = playerCache != null ? playerCache.get(player.getUniqueId()) : null;
+        if (cached != null && cached.teamChatEnabled) {
+            // Team chat will be handled by TeamChatListener/Redis instead.
+            return;
+        }
 
         Component formattedMessage = Component.text()
                 .append(Component.text("<"))
@@ -87,7 +115,6 @@ public class PrismChatVelocity {
                 .build();
 
         // Broadcast to players on OTHER servers to make it "Global"
-        // The local server will handle showing it to players on the same server.
         for (Player p : server.getAllPlayers()) {
             if (p.getCurrentServer().isPresent() && player.getCurrentServer().isPresent()) {
                 String pServer = p.getCurrentServer().get().getServerInfo().getName();
@@ -98,7 +125,6 @@ public class PrismChatVelocity {
                 }
             }
         }
-
     }
 
     // Cleanup on disable/shutdown if needed, though Velocity doesn't have a direct
