@@ -24,6 +24,7 @@ public class PrismChatVelocity {
     private h2ph.redis.RedisManager redisManager;
     private h2ph.config.ConfigManager configManager;
     private PlayerCache playerCache;
+    private h2ph.listeners.PingListener pingListener;
 
     @Inject
     public PrismChatVelocity(ProxyServer server, Logger logger,
@@ -61,6 +62,11 @@ public class PrismChatVelocity {
         // Register Listeners
         server.getEventManager().register(this, new h2ph.listeners.PlayerDataListener(databaseManager, redisManager, playerCache));
 
+        // Register Ping/MOTD Listener with configured MOTD
+        String initialMotd = configManager.getMotd("§5§lprismsmp.net§r\n           §3§lɴᴏʀᴛʜ ᴀᴍᴇʀɪᴄᴀ ᴇᴀѕᴛ ʀᴇʟᴇᴀѕᴇᴅ");
+        pingListener = new h2ph.listeners.PingListener(initialMotd);
+        server.getEventManager().register(this, pingListener);
+
         // Subscribe to prism:player_update for cache invalidation
         redisManager.subscribe("prism:player_update", msg -> {
             try {
@@ -77,6 +83,24 @@ public class PrismChatVelocity {
                 server.getCommandManager().metaBuilder("prismvoid").build(),
                 (com.velocitypowered.api.command.SimpleCommand) invocation -> {
                     // Do nothing
+                });
+
+        // Command to reload MOTD from config: /prismmotd reload
+        server.getCommandManager().register(
+                server.getCommandManager().metaBuilder("prismmotd").build(),
+                (com.velocitypowered.api.command.SimpleCommand) invocation -> {
+                    String[] args = invocation.arguments();
+                    com.velocitypowered.api.command.CommandSource src = invocation.source();
+                    if (args.length > 0 && "reload".equalsIgnoreCase(args[0])) {
+                        configManager.loadConfig();
+                        String newMotd = configManager.getMotd(initialMotd);
+                        if (pingListener != null) {
+                            pingListener.setMotd(newMotd);
+                        }
+                        src.sendMessage(Component.text("PrismMOTD: reloaded MOTD."));
+                    } else {
+                        src.sendMessage(Component.text("Usage: /prismmotd reload"));
+                    }
                 });
 
         // Schedule Ping Update Task (every 10 seconds)

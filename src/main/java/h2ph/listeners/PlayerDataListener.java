@@ -40,6 +40,7 @@ public class PlayerDataListener {
         }
 
         
+        // Clear any previous last_region / last_location when a player connects (they just joined)
         try (Connection connection = databaseManager.getConnection()) {
             boolean hasGamertag = databaseManager.hasColumn("player_data", "gamertag");
 
@@ -49,7 +50,8 @@ public class PlayerDataListener {
                                 "ON DUPLICATE KEY UPDATE gamertag = VALUES(gamertag), last_region = VALUES(last_region), last_location = VALUES(last_location)")) {
                     statement.setString(1, player.getUniqueId().toString());
                     statement.setString(2, player.getUsername());
-                    statement.setString(3, serverName);
+                    // Clear stored region because player has re-joined
+                    statement.setString(3, "");
                     statement.setString(4, "");
                     statement.executeUpdate();
                 }
@@ -59,16 +61,17 @@ public class PlayerDataListener {
                         "INSERT INTO player_data (uuid, last_region, last_location) VALUES (?, ?, ?) " +
                                 "ON DUPLICATE KEY UPDATE last_region = VALUES(last_region), last_location = VALUES(last_location)")) {
                     statement.setString(1, player.getUniqueId().toString());
-                    statement.setString(2, serverName);
+                    // Clear stored region because player has re-joined
+                    statement.setString(2, "");
                     statement.setString(3, "");
                     statement.executeUpdate();
                 }
             }
 
-            System.out.println("[PrismChat-Debug] Saved persistent player data for " + player.getUsername() + " (Server: " + serverName + ")");
+            System.out.println("[PrismChat-Debug] Cleared persistent last_region for " + player.getUsername() + " (Server connect: " + serverName + ")");
 
         } catch (SQLException e) {
-            System.err.println("[PrismChat-Debug] ERROR: Could not save persistent data for " + player.getUsername());
+            System.err.println("[PrismChat-Debug] ERROR: Could not clear persistent data for " + player.getUsername());
             e.printStackTrace();
         }
     }
@@ -87,7 +90,39 @@ public class PlayerDataListener {
             redisManager.removePlayerPing(player.getUniqueId());
             System.out.println("[PrismChat-Debug] Removed player session from Redis for " + player.getUsername());
         }
-        
+        // Save last region on disconnect so we know where they were when they left
+        try (Connection connection = databaseManager.getConnection()) {
+            boolean hasGamertag = databaseManager.hasColumn("player_data", "gamertag");
+            String serverName = player.getCurrentServer().isPresent() ? player.getCurrentServer().get().getServerInfo().getName() : "";
+
+            if (hasGamertag) {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "INSERT INTO player_data (uuid, gamertag, last_region, last_location) VALUES (?, ?, ?, ?) " +
+                                "ON DUPLICATE KEY UPDATE last_region = VALUES(last_region), last_location = VALUES(last_location)")) {
+                    statement.setString(1, player.getUniqueId().toString());
+                    statement.setString(2, player.getUsername());
+                    statement.setString(3, serverName);
+                    statement.setString(4, "");
+                    statement.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "INSERT INTO player_data (uuid, last_region, last_location) VALUES (?, ?, ?) " +
+                                "ON DUPLICATE KEY UPDATE last_region = VALUES(last_region), last_location = VALUES(last_location)")) {
+                    statement.setString(1, player.getUniqueId().toString());
+                    statement.setString(2, serverName);
+                    statement.setString(3, "");
+                    statement.executeUpdate();
+                }
+            }
+
+            System.out.println("[PrismChat-Debug] Saved persistent last_region for " + player.getUsername() + " (Server: " + serverName + ")");
+
+        } catch (SQLException e) {
+            System.err.println("[PrismChat-Debug] ERROR: Could not save last_region for " + player.getUsername());
+            e.printStackTrace();
+        }
+
         
     }
 }

@@ -61,6 +61,10 @@ public class ConfigManager {
                 "  username: \"\"\n" +
                 "  password: \"\"\n";
 
+        // Add a default MOTD entry (uses legacy section sign codes and an escaped newline)
+        defaultConfig += "\n# Server MOTD (use § color codes, use \n for newline)\n" +
+            "motd: \"§5§lprismsmp.net§r\\n           §3§lɴᴏʀᴛʜ ᴀᴍᴇʀɪᴄᴀ ᴇᴀѕᴛ ʀᴇʟᴇᴀѕᴇᴅ\"\n";
+
         try (BufferedWriter writer = Files.newBufferedWriter(configFile, StandardOpenOption.CREATE)) {
             writer.write(defaultConfig);
         }
@@ -142,6 +146,54 @@ public class ConfigManager {
 
     public String getString(String key, String defaultValue) {
         return configValues.getOrDefault(key, defaultValue);
+    }
+
+    public String getMotd(String defaultValue) {
+        String raw = configValues.get("motd");
+        if (raw == null) return defaultValue;
+        return unescapeJavaString(raw);
+    }
+
+    // Very small unescape routine to handle common Java-style escapes (\n, \t, \\ and unicode escapes)
+    private String unescapeJavaString(String input) {
+        StringBuilder sb = new StringBuilder();
+        int len = input.length();
+        for (int i = 0; i < len; i++) {
+            char ch = input.charAt(i);
+            if (ch == '\\' && i + 1 < len) {
+                char next = input.charAt(++i);
+                switch (next) {
+                    case 'n': sb.append('\n'); break;
+                    case 'r': sb.append('\r'); break;
+                    case 't': sb.append('\t'); break;
+                    case '\\': sb.append('\\'); break;
+                    case '"': sb.append('"'); break;
+                    case '\'': sb.append('\''); break;
+                    case 'u': {
+                        // parse next 4 hex digits
+                        if (i + 4 < len) {
+                            String hex = input.substring(i + 1, i + 5);
+                            try {
+                                int code = Integer.parseInt(hex, 16);
+                                sb.append((char) code);
+                                i += 4; // consumed 4 hex digits
+                            } catch (NumberFormatException e) {
+                                // malformed, append literal
+                                sb.append(next);
+                            }
+                        } else {
+                            sb.append(next);
+                        }
+                        break;
+                    }
+                    default:
+                        sb.append(next);
+                }
+            } else {
+                sb.append(ch);
+            }
+        }
+        return sb.toString();
     }
 
     public int getInt(String key, int defaultValue) {
