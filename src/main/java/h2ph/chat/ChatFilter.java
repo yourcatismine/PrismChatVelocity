@@ -24,9 +24,9 @@ public class ChatFilter {
         this.configManager = configManager;
     }
 
-    public boolean canSend(Player player, String message) {
+    public ChatDecision check(Player player, String message) {
         if (player == null) {
-            return true;
+            return ChatDecision.allow();
         }
 
         double cooldownSeconds = configManager.getDouble("chat.cooldown-seconds", 1.5);
@@ -48,8 +48,7 @@ public class ChatFilter {
                     double remaining = (cooldownMillis - elapsed) / 1000.0;
                     String secondsText = formatSeconds(remaining);
                     String messageText = TOO_FAST_TEMPLATE.replace("SECONDS", secondsText);
-                    sendBoth(player, ChatFormatUtil.deserializeLegacy(messageText));
-                    return false;
+                    return ChatDecision.block(ChatFormatUtil.deserializeLegacy(messageText));
                 }
             }
 
@@ -57,8 +56,7 @@ public class ChatFilter {
                 prune(state.messageTimes, now, windowMillis);
                 state.messageTimes.addLast(now);
                 if (state.messageTimes.size() > spamMaxMessages) {
-                    sendBoth(player, ChatFormatUtil.deserializeLegacy(TOO_MANY));
-                    return false;
+                    return ChatDecision.block(ChatFormatUtil.deserializeLegacy(TOO_MANY));
                 }
             }
 
@@ -66,8 +64,7 @@ public class ChatFilter {
             if (normalized.length() >= repeatMinLength && state.lastMessageNormalized != null) {
                 double similarity = similarityRatio(normalized, state.lastMessageNormalized);
                 if (similarity >= repeatSimilarity) {
-                    sendBoth(player, ChatFormatUtil.deserializeLegacy(REPEAT));
-                    return false;
+                    return ChatDecision.block(ChatFormatUtil.deserializeLegacy(REPEAT));
                 }
             }
 
@@ -75,12 +72,7 @@ public class ChatFilter {
             state.lastMessageNormalized = normalized;
         }
 
-        return true;
-    }
-
-    private static void sendBoth(Player player, Component message) {
-        player.sendMessage(message);
-        player.sendActionBar(message);
+        return ChatDecision.allow();
     }
 
     private static void prune(Deque<Long> deque, long now, long windowMillis) {
@@ -160,5 +152,32 @@ public class ChatFilter {
         private long lastMessageTime;
         private String lastMessageNormalized;
         private final Deque<Long> messageTimes = new ArrayDeque<>();
+    }
+
+    public static final class ChatDecision {
+        private static final ChatDecision ALLOW = new ChatDecision(true, null);
+        private final boolean allowed;
+        private final Component message;
+
+        private ChatDecision(boolean allowed, Component message) {
+            this.allowed = allowed;
+            this.message = message;
+        }
+
+        public static ChatDecision allow() {
+            return ALLOW;
+        }
+
+        public static ChatDecision block(Component message) {
+            return new ChatDecision(false, message);
+        }
+
+        public boolean isAllowed() {
+            return allowed;
+        }
+
+        public Component getMessage() {
+            return message;
+        }
     }
 }

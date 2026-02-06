@@ -47,11 +47,18 @@ public class TeamChatListener {
             // Not team chat — allow other handlers/global chat to proceed.
             return;
         }
-        if (chatFilter != null && !chatFilter.canSend(player, message)) {
-            if (!h2ph.util.ChatEventSignUtil.isSigned(event)) {
-                event.setResult(PlayerChatEvent.ChatResult.message(""));
+        if (chatFilter != null) {
+            h2ph.chat.ChatFilter.ChatDecision decision = chatFilter.check(player, message);
+            if (!decision.isAllowed()) {
+                if (decision.getMessage() != null) {
+                    player.sendMessage(decision.getMessage());
+                    player.sendActionBar(decision.getMessage());
+                }
+                if (!h2ph.util.ChatEventSignUtil.isSigned(event)) {
+                    event.setResult(PlayerChatEvent.ChatResult.message(""));
+                }
+                return;
             }
-            return;
         }
 
         // Team chat is enabled -> cancel the chat event and handle publish/delivery instantly.

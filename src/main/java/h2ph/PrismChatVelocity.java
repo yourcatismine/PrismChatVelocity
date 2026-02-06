@@ -133,11 +133,18 @@ public class PrismChatVelocity {
             // Team chat will be handled by TeamChatListener/Redis instead.
             return;
         }
-        if (chatFilter != null && !chatFilter.canSend(player, message)) {
-            if (!h2ph.util.ChatEventSignUtil.isSigned(event)) {
-                event.setResult(PlayerChatEvent.ChatResult.message(""));
+        if (chatFilter != null) {
+            h2ph.chat.ChatFilter.ChatDecision decision = chatFilter.check(player, message);
+            if (!decision.isAllowed()) {
+                if (decision.getMessage() != null) {
+                    player.sendMessage(decision.getMessage());
+                    player.sendActionBar(decision.getMessage());
+                }
+                if (!h2ph.util.ChatEventSignUtil.isSigned(event)) {
+                    event.setResult(PlayerChatEvent.ChatResult.message(""));
+                }
+                return;
             }
-            return;
         }
 
         String displayNameLegacy = h2ph.util.ChatFormatUtil.getDisplayNameLegacy(player);
