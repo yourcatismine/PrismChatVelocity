@@ -41,7 +41,7 @@ public class TeamChatListener {
         String message = event.getMessage();
 
         if (chatFilter != null && !chatFilter.canSend(player, message)) {
-            event.setResult(PlayerChatEvent.ChatResult.denied());
+            event.setResult(PlayerChatEvent.ChatResult.message(Component.empty()));
             return;
         }
 
@@ -54,7 +54,7 @@ public class TeamChatListener {
         }
 
         // Team chat is enabled -> cancel the chat event and handle publish/delivery instantly.
-        event.setResult(PlayerChatEvent.ChatResult.denied());
+        event.setResult(PlayerChatEvent.ChatResult.message(Component.empty()));
 
         final String senderDisplay = ChatFormatUtil.getDisplayNameLegacy(player);
         final String teamId = cached.teamId;
