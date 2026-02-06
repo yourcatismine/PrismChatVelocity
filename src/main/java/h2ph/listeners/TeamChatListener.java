@@ -41,7 +41,7 @@ public class TeamChatListener {
         String message = event.getMessage();
 
         if (chatFilter != null && !chatFilter.canSend(player, message)) {
-            if (!isSignedChat(event)) {
+            if (!h2ph.util.ChatEventSignUtil.isSigned(event)) {
                 event.setResult(PlayerChatEvent.ChatResult.message(""));
             }
             return;
@@ -56,7 +56,7 @@ public class TeamChatListener {
         }
 
         // Team chat is enabled -> cancel the chat event and handle publish/delivery instantly.
-        if (!isSignedChat(event)) {
+        if (!h2ph.util.ChatEventSignUtil.isSigned(event)) {
             event.setResult(PlayerChatEvent.ChatResult.message(""));
         }
 
@@ -94,16 +94,6 @@ public class TeamChatListener {
             } catch (Exception ex) {
                 ex.printStackTrace();
             }
-        }
-    }
-
-    private static boolean isSignedChat(PlayerChatEvent event) {
-        try {
-            java.lang.reflect.Method method = event.getClass().getMethod("isSigned");
-            Object result = method.invoke(event);
-            return result instanceof Boolean && (Boolean) result;
-        } catch (Exception e) {
-            return false;
         }
     }
 

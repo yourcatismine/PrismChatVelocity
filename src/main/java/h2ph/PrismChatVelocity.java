@@ -128,7 +128,7 @@ public class PrismChatVelocity {
         String message = event.getMessage();
 
         if (chatFilter != null && !chatFilter.canSend(player, message)) {
-            if (!isSignedChat(event)) {
+            if (!h2ph.util.ChatEventSignUtil.isSigned(event)) {
                 event.setResult(PlayerChatEvent.ChatResult.message(""));
             }
             return;
@@ -161,16 +161,6 @@ public class PrismChatVelocity {
                     p.sendMessage(formattedMessage);
                 }
             }
-        }
-    }
-
-    private static boolean isSignedChat(PlayerChatEvent event) {
-        try {
-            java.lang.reflect.Method method = event.getClass().getMethod("isSigned");
-            Object result = method.invoke(event);
-            return result instanceof Boolean && (Boolean) result;
-        } catch (Exception e) {
-            return false;
         }
     }
 
