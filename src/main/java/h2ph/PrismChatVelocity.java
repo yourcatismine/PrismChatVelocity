@@ -128,7 +128,7 @@ public class PrismChatVelocity {
         String message = event.getMessage();
 
         if (chatFilter != null && !chatFilter.canSend(player, message)) {
-            event.setResult(PlayerChatEvent.ChatResult.message(Component.empty()));
+            event.setResult(PlayerChatEvent.ChatResult.message(""));
             return;
         }
 
