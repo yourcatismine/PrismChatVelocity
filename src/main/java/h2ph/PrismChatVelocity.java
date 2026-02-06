@@ -127,17 +127,16 @@ public class PrismChatVelocity {
         Player player = event.getPlayer();
         String message = event.getMessage();
 
-        if (chatFilter != null && !chatFilter.canSend(player, message)) {
-            if (!h2ph.util.ChatEventSignUtil.isSigned(event)) {
-                event.setResult(PlayerChatEvent.ChatResult.message(""));
-            }
-            return;
-        }
-
         // Use cache for instant check
         ProxyPlayerData cached = playerCache != null ? playerCache.get(player.getUniqueId()) : null;
         if (cached != null && cached.teamChatEnabled) {
             // Team chat will be handled by TeamChatListener/Redis instead.
+            return;
+        }
+        if (chatFilter != null && !chatFilter.canSend(player, message)) {
+            if (!h2ph.util.ChatEventSignUtil.isSigned(event)) {
+                event.setResult(PlayerChatEvent.ChatResult.message(""));
+            }
             return;
         }
 

@@ -40,18 +40,17 @@ public class TeamChatListener {
         UUID uuid = player.getUniqueId();
         String message = event.getMessage();
 
-        if (chatFilter != null && !chatFilter.canSend(player, message)) {
-            if (!h2ph.util.ChatEventSignUtil.isSigned(event)) {
-                event.setResult(PlayerChatEvent.ChatResult.message(""));
-            }
-            return;
-        }
-
         // Use cache for instant team chat check
         ProxyPlayerData cached = playerCache != null ? playerCache.get(uuid) : null;
 
         if (cached == null || !cached.teamChatEnabled) {
             // Not team chat — allow other handlers/global chat to proceed.
+            return;
+        }
+        if (chatFilter != null && !chatFilter.canSend(player, message)) {
+            if (!h2ph.util.ChatEventSignUtil.isSigned(event)) {
+                event.setResult(PlayerChatEvent.ChatResult.message(""));
+            }
             return;
         }
 
@@ -142,3 +141,5 @@ public class TeamChatListener {
         });
     }
 }
+
+

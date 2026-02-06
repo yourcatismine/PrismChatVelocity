@@ -3,7 +3,7 @@ package h2ph.chat;
 import com.velocitypowered.api.proxy.Player;
 import h2ph.config.ConfigManager;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
+import h2ph.util.ChatFormatUtil;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -13,10 +13,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class ChatFilter {
 
-    private static final Component TOO_MANY = Component.text("You are sending too many messages at once.")
-            .color(NamedTextColor.RED);
-    private static final Component REPEAT = Component.text("Please do not repeat the same (or similar) message.")
-            .color(NamedTextColor.RED);
+    private static final String TOO_FAST_TEMPLATE = "&cPlease wait SECONDS before sending your next message.";
+    private static final String TOO_MANY = "&cYou are sending too many messages at once.";
+    private static final String REPEAT = "&cPlease do not repeat the same (or similar) message.";
 
     private final ConfigManager configManager;
     private final Map<UUID, State> states = new ConcurrentHashMap<>();
@@ -48,8 +47,8 @@ public class ChatFilter {
                 if (state.lastMessageTime > 0 && elapsed < cooldownMillis) {
                     double remaining = (cooldownMillis - elapsed) / 1000.0;
                     String secondsText = formatSeconds(remaining);
-                    sendBoth(player, Component.text(String.format("Please wait %s before sending your next message.", secondsText))
-                            .color(NamedTextColor.RED));
+                    String messageText = TOO_FAST_TEMPLATE.replace("SECONDS", secondsText);
+                    sendBoth(player, ChatFormatUtil.deserializeLegacy(messageText));
                     return false;
                 }
             }
@@ -58,7 +57,7 @@ public class ChatFilter {
                 prune(state.messageTimes, now, windowMillis);
                 state.messageTimes.addLast(now);
                 if (state.messageTimes.size() > spamMaxMessages) {
-                    sendBoth(player, TOO_MANY);
+                    sendBoth(player, ChatFormatUtil.deserializeLegacy(TOO_MANY));
                     return false;
                 }
             }
@@ -67,7 +66,7 @@ public class ChatFilter {
             if (normalized.length() >= repeatMinLength && state.lastMessageNormalized != null) {
                 double similarity = similarityRatio(normalized, state.lastMessageNormalized);
                 if (similarity >= repeatSimilarity) {
-                    sendBoth(player, REPEAT);
+                    sendBoth(player, ChatFormatUtil.deserializeLegacy(REPEAT));
                     return false;
                 }
             }
