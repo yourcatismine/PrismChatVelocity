@@ -12,7 +12,7 @@ public final class ChatEventSignUtil {
 
     public static boolean isSigned(PlayerChatEvent event) {
         if (event == null) {
-            return false;
+            return true;
         }
 
         Boolean isSigned = invokeBoolean(event, "isSigned");
@@ -37,7 +37,17 @@ public final class ChatEventSignUtil {
         if (isOptionalPresent(legacySignature)) {
             return true;
         }
-        return legacySignature != null;
+        if (legacySignature != null) {
+            return true;
+        }
+
+        Boolean heuristic = scanForSigned(event);
+        if (heuristic != null) {
+            return heuristic;
+        }
+
+        // If we cannot determine, assume signed to avoid cancel/modify warnings.
+        return true;
     }
 
     private static Boolean invokeBoolean(PlayerChatEvent event, String name) {
@@ -62,5 +72,29 @@ public final class ChatEventSignUtil {
             return ((Optional<?>) value).isPresent();
         }
         return false;
+    }
+
+    private static Boolean scanForSigned(PlayerChatEvent event) {
+        try {
+            for (Method method : event.getClass().getMethods()) {
+                String name = method.getName().toLowerCase();
+                if (!name.contains("signed") && !name.contains("signature")) {
+                    continue;
+                }
+                if (method.getParameterCount() != 0) {
+                    continue;
+                }
+                Object result = method.invoke(event);
+                if (result instanceof Boolean) {
+                    return (Boolean) result;
+                }
+                if (result instanceof Optional) {
+                    return ((Optional<?>) result).isPresent();
+                }
+            }
+        } catch (Exception e) {
+            return null;
+        }
+        return null;
     }
 }
