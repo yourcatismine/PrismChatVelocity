@@ -56,7 +56,7 @@ public class CommandBlockListener {
 
     private static void removeRootCommand(RootCommandNode<?> root, String name) {
         if (root.getChild(name) != null) {
-            root.removeCommand(name);
+            root.getChildren().removeIf(node -> node.getName().equalsIgnoreCase(name));
         }
     }
 
