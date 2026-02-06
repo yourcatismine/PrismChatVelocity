@@ -51,7 +51,7 @@ public class CommandBlockListener {
         removeRootCommand(root, "prismvoid");
         removeRootCommand(root, "velocity:callback");
         removeRootCommand(root, "velocity");
-        removeRootCommand(root, "btab");
+        removeRootCommand(root, "btabr");
     }
 
     private static void removeRootCommand(RootCommandNode<?> root, String name) {
