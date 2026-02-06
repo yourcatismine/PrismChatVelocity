@@ -24,6 +24,7 @@ public class PrismChatVelocity {
     private h2ph.redis.RedisManager redisManager;
     private h2ph.config.ConfigManager configManager;
     private PlayerCache playerCache;
+    private h2ph.chat.ChatFilter chatFilter;
     private h2ph.listeners.PingListener pingListener;
 
     @Inject
@@ -54,13 +55,15 @@ public class PrismChatVelocity {
 
         // Initialize Player Cache
         playerCache = new PlayerCache(databaseManager);
+        chatFilter = new h2ph.chat.ChatFilter(configManager);
 
         // Register Team Chat Listener (handles intercepting chat and redis subscription)
         String instanceId = java.util.UUID.randomUUID().toString();
-        server.getEventManager().register(this, new h2ph.listeners.TeamChatListener(server, databaseManager, redisManager, playerCache, instanceId));
+        server.getEventManager().register(this, new h2ph.listeners.TeamChatListener(server, databaseManager, redisManager, playerCache, instanceId, chatFilter));
 
         // Register Listeners
         server.getEventManager().register(this, new h2ph.listeners.PlayerDataListener(databaseManager, redisManager, playerCache));
+        server.getEventManager().register(this, new h2ph.listeners.CommandBlockListener());
 
         // Register Ping/MOTD Listener with configured MOTD
         String initialMotd = configManager.getMotd("§5§lprismsmp.net§r\n           §3§lɴᴏʀᴛʜ ᴀᴍᴇʀɪᴄᴀ ᴇᴀѕᴛ ʀᴇʟᴇᴀѕᴇᴅ");
@@ -124,6 +127,11 @@ public class PrismChatVelocity {
         Player player = event.getPlayer();
         String message = event.getMessage();
 
+        if (chatFilter != null && !chatFilter.canSend(player, message)) {
+            event.setResult(PlayerChatEvent.ChatResult.denied());
+            return;
+        }
+
         // Use cache for instant check
         ProxyPlayerData cached = playerCache != null ? playerCache.get(player.getUniqueId()) : null;
         if (cached != null && cached.teamChatEnabled) {
@@ -131,9 +139,12 @@ public class PrismChatVelocity {
             return;
         }
 
+        String displayNameLegacy = h2ph.util.ChatFormatUtil.getDisplayNameLegacy(player);
+        Component displayNameComponent = h2ph.util.ChatFormatUtil.deserializeLegacy(displayNameLegacy);
+
         Component formattedMessage = Component.text()
                 .append(Component.text("<"))
-                .append(Component.text(player.getUsername()))
+                .append(displayNameComponent)
                 .append(Component.text("> "))
                 .append(Component.text(message))
                 .build();

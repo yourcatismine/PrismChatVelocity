@@ -9,6 +9,7 @@ import h2ph.db.DatabaseManager;
 import h2ph.redis.RedisManager;
 import h2ph.cache.PlayerCache;
 import h2ph.cache.ProxyPlayerData;
+import h2ph.util.ChatFormatUtil;
 import net.kyori.adventure.text.Component;
 
 import java.util.UUID;
@@ -20,14 +21,16 @@ public class TeamChatListener {
     private final ProxyServer server;
     private final PlayerCache playerCache;
     private final Gson gson = new Gson();
+    private final h2ph.chat.ChatFilter chatFilter;
     private final String instanceId;
 
-    public TeamChatListener(ProxyServer server, DatabaseManager databaseManager, RedisManager redisManager, PlayerCache playerCache, String instanceId) {
+    public TeamChatListener(ProxyServer server, DatabaseManager databaseManager, RedisManager redisManager, PlayerCache playerCache, String instanceId, h2ph.chat.ChatFilter chatFilter) {
         this.server = server;
         this.databaseManager = databaseManager;
         this.redisManager = redisManager;
         this.playerCache = playerCache;
         this.instanceId = instanceId != null ? instanceId : "";
+        this.chatFilter = chatFilter;
         startSubscriber();
     }
 
@@ -35,6 +38,12 @@ public class TeamChatListener {
     public void onChat(PlayerChatEvent event) {
         Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
+        String message = event.getMessage();
+
+        if (chatFilter != null && !chatFilter.canSend(player, message)) {
+            event.setResult(PlayerChatEvent.ChatResult.denied());
+            return;
+        }
 
         // Use cache for instant team chat check
         ProxyPlayerData cached = playerCache != null ? playerCache.get(uuid) : null;
@@ -47,15 +56,14 @@ public class TeamChatListener {
         // Team chat is enabled -> cancel the chat event and handle publish/delivery instantly.
         event.setResult(PlayerChatEvent.ChatResult.denied());
 
-        final String sender = player.getUsername();
-        final String message = event.getMessage();
+        final String senderDisplay = ChatFormatUtil.getDisplayNameLegacy(player);
         final String teamId = cached.teamId;
         final String teamName = cached.teamName;
 
         // Publish to Redis instantly (non-blocking)
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
-                String payload = redisManager.makeTeamChatPayload(sender, teamId, teamName, message, instanceId);
+                String payload = redisManager.makeTeamChatPayload(senderDisplay, teamId, teamName, message, instanceId);
                 redisManager.publishTeamChat("prism:team_chat", payload);
             } catch (Exception e) {
                 e.printStackTrace();
@@ -63,12 +71,21 @@ public class TeamChatListener {
         });
 
         // Immediate local delivery to reduce perceived latency (check cache for team membership)
-        String format = String.format("§7[%s§7] §5%s: §f%s", teamName != null ? teamName : "Team", sender, message);
+        String label = String.format("&7[%s&7] &5", teamName != null ? teamName : "Team");
+        Component labelComponent = ChatFormatUtil.deserializeLegacy(label);
+        Component senderComponent = ChatFormatUtil.deserializeLegacy(senderDisplay);
+        Component messagePrefix = ChatFormatUtil.deserializeLegacy(": &f");
+        Component formattedMessage = Component.text()
+                .append(labelComponent)
+                .append(senderComponent)
+                .append(messagePrefix)
+                .append(Component.text(message))
+                .build();
         for (Player p : server.getAllPlayers()) {
             try {
                 ProxyPlayerData pData = playerCache != null ? playerCache.get(p.getUniqueId()) : null;
                 if (pData != null && teamId != null && teamId.equals(pData.teamId)) {
-                    p.sendMessage(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().deserialize(format));
+                    p.sendMessage(formattedMessage);
                 }
             } catch (Exception ex) {
                 ex.printStackTrace();
@@ -93,14 +110,23 @@ public class TeamChatListener {
                 String teamName = (String) data.get("teamName");
                 String content = (String) data.get("message");
 
-                String format = String.format("§7[%s§7] §5%s: §f%s", teamName != null ? teamName : "Team", sender, content);
+                String label = String.format("&7[%s&7] &5", teamName != null ? teamName : "Team");
+                Component labelComponent = ChatFormatUtil.deserializeLegacy(label);
+                Component senderComponent = ChatFormatUtil.deserializeLegacy(sender != null ? sender : "");
+                Component messagePrefix = ChatFormatUtil.deserializeLegacy(": &f");
+                Component formattedMessage = Component.text()
+                        .append(labelComponent)
+                        .append(senderComponent)
+                        .append(messagePrefix)
+                        .append(Component.text(content != null ? content : ""))
+                        .build();
 
                 // Use cache for team membership check (instant, no DB query)
                 for (Player p : server.getAllPlayers()) {
                     try {
                         ProxyPlayerData pData = playerCache != null ? playerCache.get(p.getUniqueId()) : null;
                         if (pData != null && teamId != null && teamId.equals(pData.teamId)) {
-                            p.sendMessage(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().deserialize(format));
+                            p.sendMessage(formattedMessage);
                         }
                     } catch (Exception ex) {
                         ex.printStackTrace();

@@ -59,7 +59,15 @@ public class ConfigManager {
                 "  host: localhost\n" +
                 "  port: 6379\n" +
                 "  username: \"\"\n" +
-                "  password: \"\"\n";
+                "  password: \"\"\n" +
+                "\n" +
+                "# Chat filter / anti-spam\n" +
+                "chat:\n" +
+                "  cooldown-seconds: 1.5\n" +
+                "  spam-window-seconds: 3\n" +
+                "  spam-max-messages: 4\n" +
+                "  repeat-min-length: 4\n" +
+                "  repeat-similarity: 0.9\n";
 
         // Add a default MOTD entry (uses legacy section sign codes and an escaped newline)
         defaultConfig += "\n# Server MOTD (use § color codes, use \n for newline)\n" +
@@ -199,6 +207,14 @@ public class ConfigManager {
     public int getInt(String key, int defaultValue) {
         try {
             return Integer.parseInt(configValues.getOrDefault(key, String.valueOf(defaultValue)));
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    public double getDouble(String key, double defaultValue) {
+        try {
+            return Double.parseDouble(configValues.getOrDefault(key, String.valueOf(defaultValue)));
         } catch (NumberFormatException e) {
             return defaultValue;
         }
