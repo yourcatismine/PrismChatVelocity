@@ -67,7 +67,8 @@ public class ConfigManager {
                 "  spam-window-seconds: 3\n" +
                 "  spam-max-messages: 4\n" +
                 "  repeat-min-length: 4\n" +
-                "  repeat-similarity: 0.9\n";
+                "  repeat-similarity: 0.9\n" +
+                "  assume-signed-when-unknown: true\n";
 
         // Add a default MOTD entry (uses legacy section sign codes and an escaped newline)
         defaultConfig += "\n# Server MOTD (use § color codes, use \n for newline)\n" +
@@ -218,6 +219,21 @@ public class ConfigManager {
         } catch (NumberFormatException e) {
             return defaultValue;
         }
+    }
+
+    public boolean getBoolean(String key, boolean defaultValue) {
+        String raw = configValues.get(key);
+        if (raw == null) {
+            return defaultValue;
+        }
+        String val = raw.trim().toLowerCase();
+        if (val.equals("true") || val.equals("yes") || val.equals("1")) {
+            return true;
+        }
+        if (val.equals("false") || val.equals("no") || val.equals("0")) {
+            return false;
+        }
+        return defaultValue;
     }
 
     // Helper getters that prefer backend overrides when present.

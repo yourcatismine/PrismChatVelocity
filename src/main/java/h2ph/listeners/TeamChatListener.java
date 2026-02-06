@@ -23,14 +23,16 @@ public class TeamChatListener {
     private final Gson gson = new Gson();
     private final h2ph.chat.ChatFilter chatFilter;
     private final String instanceId;
+    private final boolean assumeSignedWhenUnknown;
 
-    public TeamChatListener(ProxyServer server, DatabaseManager databaseManager, RedisManager redisManager, PlayerCache playerCache, String instanceId, h2ph.chat.ChatFilter chatFilter) {
+    public TeamChatListener(ProxyServer server, DatabaseManager databaseManager, RedisManager redisManager, PlayerCache playerCache, String instanceId, h2ph.chat.ChatFilter chatFilter, boolean assumeSignedWhenUnknown) {
         this.server = server;
         this.databaseManager = databaseManager;
         this.redisManager = redisManager;
         this.playerCache = playerCache;
         this.instanceId = instanceId != null ? instanceId : "";
         this.chatFilter = chatFilter;
+        this.assumeSignedWhenUnknown = assumeSignedWhenUnknown;
         startSubscriber();
     }
 
@@ -54,7 +56,7 @@ public class TeamChatListener {
                     player.sendMessage(decision.getMessage());
                     player.sendActionBar(decision.getMessage());
                 }
-                if (!h2ph.util.ChatEventSignUtil.isSigned(event)) {
+                if (!h2ph.util.ChatEventSignUtil.isSigned(event, assumeSignedWhenUnknown)) {
                     event.setResult(PlayerChatEvent.ChatResult.message(""));
                 }
                 return;
@@ -62,7 +64,7 @@ public class TeamChatListener {
         }
 
         // Team chat is enabled -> cancel the chat event and handle publish/delivery instantly.
-        if (!h2ph.util.ChatEventSignUtil.isSigned(event)) {
+        if (!h2ph.util.ChatEventSignUtil.isSigned(event, assumeSignedWhenUnknown)) {
             event.setResult(PlayerChatEvent.ChatResult.message(""));
         }
 

@@ -26,6 +26,7 @@ public class PrismChatVelocity {
     private PlayerCache playerCache;
     private h2ph.chat.ChatFilter chatFilter;
     private h2ph.listeners.PingListener pingListener;
+    private boolean assumeSignedWhenUnknown;
 
     @Inject
     public PrismChatVelocity(ProxyServer server, Logger logger,
@@ -56,10 +57,11 @@ public class PrismChatVelocity {
         // Initialize Player Cache
         playerCache = new PlayerCache(databaseManager);
         chatFilter = new h2ph.chat.ChatFilter(configManager);
+        assumeSignedWhenUnknown = configManager.getBoolean("chat.assume-signed-when-unknown", true);
 
         // Register Team Chat Listener (handles intercepting chat and redis subscription)
         String instanceId = java.util.UUID.randomUUID().toString();
-        server.getEventManager().register(this, new h2ph.listeners.TeamChatListener(server, databaseManager, redisManager, playerCache, instanceId, chatFilter));
+        server.getEventManager().register(this, new h2ph.listeners.TeamChatListener(server, databaseManager, redisManager, playerCache, instanceId, chatFilter, assumeSignedWhenUnknown));
 
         // Register Listeners
         server.getEventManager().register(this, new h2ph.listeners.PlayerDataListener(databaseManager, redisManager, playerCache));
@@ -140,7 +142,7 @@ public class PrismChatVelocity {
                     player.sendMessage(decision.getMessage());
                     player.sendActionBar(decision.getMessage());
                 }
-                if (!h2ph.util.ChatEventSignUtil.isSigned(event)) {
+                if (!h2ph.util.ChatEventSignUtil.isSigned(event, assumeSignedWhenUnknown)) {
                     event.setResult(PlayerChatEvent.ChatResult.message(""));
                 }
                 return;

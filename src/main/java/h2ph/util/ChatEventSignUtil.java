@@ -10,9 +10,9 @@ public final class ChatEventSignUtil {
     private ChatEventSignUtil() {
     }
 
-    public static boolean isSigned(PlayerChatEvent event) {
+    public static boolean isSigned(PlayerChatEvent event, boolean assumeSignedWhenUnknown) {
         if (event == null) {
-            return true;
+            return assumeSignedWhenUnknown;
         }
 
         Boolean isSigned = invokeBoolean(event, "isSigned");
@@ -46,8 +46,8 @@ public final class ChatEventSignUtil {
             return heuristic;
         }
 
-        // If we cannot determine, assume signed to avoid cancel/modify warnings.
-        return true;
+        // If we cannot determine, use configured fallback.
+        return assumeSignedWhenUnknown;
     }
 
     private static Boolean invokeBoolean(PlayerChatEvent event, String name) {
